@@ -47,20 +47,27 @@ class ElevatorManager(BaseModel):
         # Update the selected elevator's target and current floors
         selected_elevator.current_floor = request.floor
 
-        if selected_elevator.direction == Direction.UP:
-            selected_elevator.target_floor = max(
-                request.target_floor, selected_elevator.target_floor
-            )
+        if selected_elevator.load + request.load <= selected_elevator.max_load:
+            selected_elevator.load += request.load
+            if selected_elevator.direction == Direction.UP:
+                selected_elevator.target_floor = max(
+                    request.target_floor, selected_elevator.target_floor
+                )
 
-        elif selected_elevator.direction == Direction.DOWN:
-            selected_elevator.target_floor = min(
-                request.target_floor, selected_elevator.target_floor
-            )
+            elif selected_elevator.direction == Direction.DOWN:
+                selected_elevator.target_floor = min(
+                    request.target_floor, selected_elevator.target_floor
+                )
+
+            else:
+                selected_elevator.target_floor = request.target_floor
+
+            selected_elevator.score = max_score
+
+            return selected_elevator.id
 
         else:
-            selected_elevator.target_floor = request.target_floor
-
-        return selected_elevator.id
+            return -1
 
     def get_elevator_by_id(self, elevator_id: int) -> Elevator:
         return next(
@@ -84,9 +91,19 @@ class ElevatorManager(BaseModel):
 
     def get_state(self):
         return {
-            f"elevator {elevator.id}": elevator.current_floor
+            f"elevator {elevator.id}": f"current_floor: {elevator.current_floor}, target_floor: {elevator.target_floor}, load: {elevator.load}, score: {elevator.score}"
             for elevator in self.elevators
         }
+
+    def update_all_elevators(self):
+        for elevator in self.elevators:
+            elevator.update()
+
+    def reset(self):
+        for elevator in self.elevators:
+            elevator.current_floor = 0
+            elevator.target_floor = 0
+            elevator.load = 0
 
     @classmethod
     def from_config(cls, config: Config):
@@ -102,6 +119,7 @@ class ElevatorManager(BaseModel):
                     target_floor=0,
                     load=0,
                     average_unitary_load=config.average_unitary_load,
+                    score=0,
                 )
                 for i in range(config.n_elevators)
             ],

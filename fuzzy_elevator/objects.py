@@ -19,6 +19,7 @@ class Direction(Enum):
 class Request(BaseModel):
     floor: int
     target_floor: int
+    load: float
 
 
 class Elevator(BaseModel):
@@ -32,6 +33,7 @@ class Elevator(BaseModel):
     target_floor: int
     load: float
     average_unitary_load: float
+    score: float
 
     def is_available(self, request: Request) -> bool:
         is_same_trajectory = (
@@ -39,9 +41,11 @@ class Elevator(BaseModel):
             and request.floor in self.trajectory()
         )
 
+        is_same_floor = request.floor == self.current_floor
+
         has_free_load = self.load + self.average_unitary_load <= self.max_load
 
-        return is_same_trajectory and has_free_load
+        return is_same_trajectory and has_free_load and not is_same_floor
 
     def trajectory(self) -> range:
         if self.current_floor < self.target_floor:
@@ -52,6 +56,10 @@ class Elevator(BaseModel):
 
         else:
             return range(0, self.n_floors + 1)
+
+    def update(self) -> None:
+        self.current_floor = self.target_floor
+        self.load = 0.0
 
     @property
     def direction(self) -> Direction:
@@ -81,12 +89,13 @@ class Config(BaseModel):
 
 
 class FuzzyInput(BaseModel):
-    distance: int
+    distance: float
     regenerative_capacity: float
 
     @classmethod
     def from_request(cls, elevator: Elevator, request: Request) -> "FuzzyInput":
-        distance = min(abs(elevator.current_floor - request.floor), 15)
+        # distance = min(abs(elevator.current_floor - request.floor), 15)
+        distance = abs(elevator.current_floor - request.floor)/elevator.n_floors
 
         if elevator.direction == Direction.UP:
             regenerative_capacity = (
